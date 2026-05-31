@@ -365,6 +365,58 @@ canvas.ruler{display:block}
 
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 
+/* ---- collapsible controls (⚙) + readout peek — keeps the WALL the hero on phones ---- */
+.controls{display:contents}                 /* desktop: controls flow inline in the header */
+.controls-title{display:none}
+.opt-btn{display:none}                       /* desktop: gear hidden (controls are inline) */
+.ro-head{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;
+  padding:0 2px 2px;text-align:left;cursor:default;font:inherit}
+.ro-head .name{font-weight:700;font-size:13.5px;color:var(--ink)}
+.ro-key{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:13px;color:var(--accent)}
+.ro-exp{display:none}
+.ro-body{display:block}
+.ro-body .acts{margin-top:9px}
+
+@media (max-width:899px){
+  /* one clean top row: drop the wordmark, collapse all controls behind the gear */
+  .brand b,.brand small{display:none}
+  .brand{margin-right:2px}
+  .opt-btn{display:inline-grid}
+  .controls{display:none}
+  .controls.open{
+    display:flex;flex-direction:column;align-items:stretch;gap:8px;
+    position:absolute;top:calc(100% + 6px);left:8px;right:8px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow-2);padding:12px;z-index:55;max-height:78vh;overflow:auto;
+  }
+  .controls.open .controls-title{display:block;font-size:11px;font-weight:800;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px}
+  .controls.open .field{justify-content:space-between;font-size:13.5px}
+  .controls.open .field input[type=number]{width:80px}
+  .controls.open .seg{align-self:flex-start}
+  .controls.open .toggle{justify-content:flex-start;min-height:46px;border-radius:var(--r-sm)}
+  .controls.open #spacingField{justify-content:space-between}
+
+  /* measurement panel → a slim peek; tap the bar to expand */
+  .ro-head{cursor:pointer;padding:12px 4px 6px}
+  .ro-head .name{max-width:48%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ro-exp{display:inline-block;color:var(--ink-soft);font-size:14px;transition:transform var(--dur-fast) ease}
+  .readout.expanded .ro-exp{transform:rotate(180deg)}
+  .ro-body{display:none;max-height:42vh;overflow:auto}
+  .readout.expanded .ro-body{display:block}
+  .stats{grid-template-columns:repeat(2,1fr);gap:7px;margin-top:4px}
+  .stat{padding:6px 9px}
+  .ro-body .acts button{flex:1;min-width:0}
+
+  /* slimmer inventory strip so the wall keeps the room */
+  .tray-head{padding:7px 12px 3px}
+  .tray-items{padding:4px 12px 8px}
+  .chip{width:88px}
+  .chip .thumb{height:58px}
+  .chip .meta{padding:5px 7px 6px}
+  .tray-add{padding:6px 12px 10px}
+}
+
 /* small-screen comfort (phones ≤380px) */
 @media (max-width:380px){
   .modal{padding:10px}
@@ -396,28 +448,31 @@ canvas.ruler{display:block}
       <div class="proj-menu" id="projMenu" role="menu"></div>
     </div>
 
-    <label class="field">Wall
-      <input id="wallW" type="number" inputmode="decimal" min="1" step="0.5" aria-label="Wall width">
-      <span class="times">×</span>
-      <input id="wallH" type="number" inputmode="decimal" min="1" step="0.5" aria-label="Wall height">
-    </label>
-    <div class="seg" id="unitSeg" role="group" aria-label="Units">
-      <button data-u="in">in</button><button data-u="cm">cm</button><button data-u="ft">ft</button>
+    <div class="controls" id="controls">
+      <div class="controls-title">Wall &amp; view options</div>
+      <label class="field">Wall
+        <input id="wallW" type="number" inputmode="decimal" min="1" step="0.5" aria-label="Wall width">
+        <span class="times">×</span>
+        <input id="wallH" type="number" inputmode="decimal" min="1" step="0.5" aria-label="Wall height">
+      </label>
+      <div class="seg" id="unitSeg" role="group" aria-label="Units">
+        <button data-u="in">in</button><button data-u="cm">cm</button><button data-u="ft">ft</button>
+      </div>
+      <button class="toggle" id="gridToggle" aria-pressed="true"><span class="dot"></span>Grid</button>
+      <label class="field" id="spacingField">every
+        <input id="spacing" type="number" inputmode="decimal" min="0.25" step="0.25" aria-label="Grid spacing">
+        <span class="u" id="spacingUnit">in</span>
+      </label>
+      <button class="toggle" id="snapToggle" aria-pressed="true"><span class="dot"></span>Snap</button>
+      <button class="toggle" id="alignToggle" aria-pressed="true"><span class="dot"></span>Align</button>
+      <button class="toggle" id="eyeToggle" aria-pressed="false"><span class="dot"></span>57″ line</button>
     </div>
-
-    <button class="toggle" id="gridToggle" aria-pressed="true"><span class="dot"></span>Grid</button>
-    <label class="field" id="spacingField">every
-      <input id="spacing" type="number" inputmode="decimal" min="0.25" step="0.25" aria-label="Grid spacing">
-      <span class="u" id="spacingUnit">in</span>
-    </label>
-    <button class="toggle" id="snapToggle" aria-pressed="true"><span class="dot"></span>Snap</button>
-    <button class="toggle" id="alignToggle" aria-pressed="true"><span class="dot"></span>Align</button>
-    <button class="toggle" id="eyeToggle" aria-pressed="false"><span class="dot"></span>57″ line</button>
 
     <span class="spacer"></span>
     <span class="warn" id="storeWarn" title="Open via a local server or host for photos to be saved">⚠ not saving</span>
     <button class="icon-btn" id="undoBtn" aria-label="Undo" title="Undo (Ctrl+Z)" disabled>↶</button>
     <button class="icon-btn" id="redoBtn" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled>↷</button>
+    <button class="icon-btn opt-btn" id="optBtn" aria-label="Wall &amp; view options" aria-haspopup="true">⚙</button>
     <button class="icon-btn" id="menuBtn" aria-label="Menu" aria-haspopup="true">⋯</button>
 
     <div class="menu" id="menu" role="menu">
@@ -482,17 +537,21 @@ canvas.ruler{display:block}
 
       <!-- measurement readout -->
       <div class="readout" id="readout">
-        <div class="row">
+        <button class="ro-head" id="roHead" aria-expanded="false">
           <span class="name" id="roName">Frame</span>
-          <span class="acts">
+          <span class="ro-key" id="roKey"></span>
+          <span class="ro-exp" aria-hidden="true">⌃</span>
+        </button>
+        <div class="ro-body" id="roBody">
+          <div class="stats" id="roStats"></div>
+          <div class="acts">
             <button id="actEdit">✎ Size</button>
             <button id="actDup">⧉ Duplicate</button>
             <button id="actRemove">↩ Off wall</button>
             <button id="actDelete" class="danger">🗑</button>
-          </span>
+          </div>
+          <div class="ro-note"><input id="roNote" type="text" maxlength="200" placeholder="📝 Add a note — e.g. “use a drywall anchor”…"></div>
         </div>
-        <div class="stats" id="roStats"></div>
-        <div class="ro-note"><input id="roNote" type="text" maxlength="200" placeholder="📝 Add a note — e.g. “use a drywall anchor”…"></div>
       </div>
     </main>
   </div>
@@ -1013,6 +1072,7 @@ function renderReadout(){
   const centerFloorIn=w.hIn-(it.y+it.hIn/2);
   const nailIn=topFloorIn-state.guides.wireSagIn;
   const off = (it.x<0||it.y<0||it.x+it.wIn>w.wIn||it.y+it.hIn>w.hIn);
+  $('roKey').textContent = off ? 'off wall' : ('Nail '+fmtLen(clamp(nailIn,0,w.hIn)));
   const stats=[
     ['Size', fmtLen(it.wIn)+' × '+fmtLen(it.hIn), false],
     ['From left', fmtLen(leftIn), false],
@@ -1421,10 +1481,13 @@ function wire(){
     }
   });
   // menu
-  $('menuBtn').addEventListener('click',e=>{ e.stopPropagation(); closeProjMenu(); $('menu').classList.toggle('show'); });
+  $('menuBtn').addEventListener('click',e=>{ e.stopPropagation(); closeProjMenu(); $('controls').classList.remove('open'); $('menu').classList.toggle('show'); });
+  $('optBtn').addEventListener('click',e=>{ e.stopPropagation(); closeMenu(); closeProjMenu(); $('controls').classList.toggle('open'); });
+  $('roHead').addEventListener('click',()=>{ $('readout').classList.toggle('expanded'); });
   document.addEventListener('click',e=>{
     if(!$('menu').contains(e.target)&&e.target!==$('menuBtn')) closeMenu();
     if(!$('projMenu').contains(e.target)&&!$('projBtn').contains(e.target)) closeProjMenu();
+    if(!$('controls').contains(e.target)&&!$('optBtn').contains(e.target)) $('controls').classList.remove('open');
   });
   $('miExport').addEventListener('click',exportJSON);
   $('miImport').addEventListener('click',()=>{ $('importInput').click(); closeMenu(); });
