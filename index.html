@@ -129,6 +129,7 @@ header{
 
 .icon-btn{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:var(--r-sm);
   border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-size:17px}
+.icon-btn:disabled{opacity:.38;cursor:default}
 
 /* ---- layout body ---- */
 .body{display:flex;flex-direction:column-reverse;flex:1 1 auto;min-height:0}
@@ -352,6 +353,16 @@ canvas.ruler{display:block}
 .warn{font-size:11.5px;color:var(--danger);font-weight:600;display:none;align-items:center;gap:5px}
 .warn.show{display:inline-flex}
 
+/* shopping list */
+.shop-list{display:flex;flex-direction:column;gap:6px}
+.shop-row{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface-2)}
+.shop-q{font-weight:800;font-family:var(--mono);color:var(--accent);min-width:38px}
+.shop-sz{font-weight:600;font-variant-numeric:tabular-nums}
+.shop-total{margin:14px 2px 0;font-size:12.5px;color:var(--ink-soft)}
+.ro-note{margin-top:9px}
+.ro-note input{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:var(--r-sm);font-size:13.5px;background:var(--surface)}
+.note-dot{position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;font-size:10px;box-shadow:var(--shadow-1)}
+
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 
 /* small-screen comfort (phones ≤380px) */
@@ -405,6 +416,8 @@ canvas.ruler{display:block}
 
     <span class="spacer"></span>
     <span class="warn" id="storeWarn" title="Open via a local server or host for photos to be saved">⚠ not saving</span>
+    <button class="icon-btn" id="undoBtn" aria-label="Undo" title="Undo (Ctrl+Z)" disabled>↶</button>
+    <button class="icon-btn" id="redoBtn" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled>↷</button>
     <button class="icon-btn" id="menuBtn" aria-label="Menu" aria-haspopup="true">⋯</button>
 
     <div class="menu" id="menu" role="menu">
@@ -412,6 +425,7 @@ canvas.ruler{display:block}
       <button class="mi" id="miExport" role="menuitem">💾 Export project (.json)</button>
       <button class="mi" id="miImport" role="menuitem">📂 Import project…</button>
       <button class="mi" id="miPng" role="menuitem">🖼 Export layout image (.png)</button>
+      <button class="mi" id="miShop" role="menuitem">📋 Frame shopping list</button>
       <hr>
       <h4>Hanging</h4>
       <div class="mrow">
@@ -468,6 +482,7 @@ canvas.ruler{display:block}
           </span>
         </div>
         <div class="stats" id="roStats"></div>
+        <div class="ro-note"><input id="roNote" type="text" maxlength="200" placeholder="📝 Add a note — e.g. “use a drywall anchor”…"></div>
       </div>
     </main>
   </div>
@@ -552,6 +567,18 @@ canvas.ruler{display:block}
   </div>
 </div>
 
+<!-- ============ SHOPPING LIST MODAL ============ -->
+<div class="modal" id="shopModal">
+  <div class="card">
+    <div class="card-head"><h3>Frame shopping list</h3><button class="x" id="shopClose" aria-label="Close">✕</button></div>
+    <div class="card-body"><div id="shopBody"></div></div>
+    <div class="card-foot">
+      <button id="shopCopy">📋 Copy list</button>
+      <button class="primary" id="shopOk">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <div class="tip" id="tip">
   👋 Start by setting your <b>wall size</b> above, then add a frame with <b>📷 Photo</b> or <b>▭ Blank frame</b>.
@@ -601,6 +628,18 @@ let RULER_CSS = null;                              // cached static ruler tokens
 const zNext = ()=> ++state.seq;          // monotonic counter — ids and z-order share it
 const uid   = ()=> 'it'+zNext();
 const findItem = id => state.items.find(i=>i.id===id);
+
+/* ----------------------------- UNDO / REDO --------------------------- */
+let hist = { stack: [], idx: -1 };
+function snapState(){ return JSON.parse(JSON.stringify({name:state.name,unit:state.unit,wall:state.wall,grid:state.grid,guides:state.guides,items:state.items,seq:state.seq})); }
+function histReset(){ if(!state) return; hist={stack:[snapState()], idx:0}; updateUndoUI(); }
+function commit(){ if(!state) return; hist.stack=hist.stack.slice(0,hist.idx+1); hist.stack.push(snapState());
+  if(hist.stack.length>25) hist.stack.shift(); else hist.idx++; updateUndoUI(); }      // cap bounds memory (snapshots hold photo data)
+function restoreSnap(s){ const c=JSON.parse(JSON.stringify(s)); state.name=c.name; state.unit=c.unit; state.wall=c.wall; state.grid=c.grid; state.guides=c.guides; state.items=c.items; state.seq=c.seq; }
+function afterHist(){ selectedId=null; clearAlignGuides(); syncControls(); layout(); renderWall(); renderTray(); renderReadout(); renderProjects(); updateUndoUI(); save(); }
+function undo(){ if(hist.idx<=0) return; hist.idx--; restoreSnap(hist.stack[hist.idx]); afterHist(); }
+function redo(){ if(hist.idx>=hist.stack.length-1) return; hist.idx++; restoreSnap(hist.stack[hist.idx]); afterHist(); }
+function updateUndoUI(){ const u=$('undoBtn'), r=$('redoBtn'); if(u) u.disabled=hist.idx<=0; if(r) r.disabled=hist.idx>=hist.stack.length-1; }
 
 /* --------------------------- PERSISTENCE (IndexedDB) ----------------- */
 const idb = (()=>{
@@ -683,7 +722,8 @@ function cleanItem(i){
     wIn:+i.wIn, hIn:+i.hIn,
     x: Number.isFinite(i.x)?+i.x:0, y: Number.isFinite(i.y)?+i.y:0,
     placed: !!i.placed,
-    z: Number.isFinite(i.z)?+i.z:0
+    z: Number.isFinite(i.z)?+i.z:0,
+    note: (typeof i.note==='string')? i.note.slice(0,200) : ''
   };
 }
 
@@ -791,6 +831,7 @@ function renderWall(){                       // full rebuild of item nodes (neve
     if(it.type==='photo'&&it.src){ const img=new Image(); img.src=it.src; img.alt=''; el.appendChild(img); }
     else el.style.background=it.color;
     const nm=document.createElement('span'); nm.className='nm'; nm.textContent=it.name; el.appendChild(nm);
+    if(it.note){ const nd=document.createElement('span'); nd.className='note-dot'; nd.title=it.note; nd.textContent='📝'; el.appendChild(nd); }
     layer.appendChild(el);
     placeNode(el,it);
     attachDrag(el,it);
@@ -855,6 +896,7 @@ function renderReadout(){
   if(!it||!it.placed){ ro.classList.remove('show'); return; }
   ro.classList.add('show');
   $('roName').textContent=it.name;
+  $('roNote').value=it.note||'';
   const w=state.wall;
   const leftIn=it.x, rightIn=w.wIn-(it.x+it.wIn);
   const topFloorIn=w.hIn-it.y;
@@ -900,20 +942,20 @@ function placeItem(id){
   it.placed=true; it.z=zNext();
   it.x=clamp1D((state.wall.wIn-it.wIn)/2, it.wIn, state.wall.wIn);
   it.y=clamp1D((state.wall.hIn-it.hIn)/2, it.hIn, state.wall.hIn);
-  renderWall(); renderTray(); selectItem(id); save();
+  renderWall(); renderTray(); selectItem(id); save(); commit();
   const node=$('items').querySelector('.item[data-id="'+id+'"]');
   if(node){ node.classList.add('placing'); node.addEventListener('animationend',()=>node.classList.remove('placing'),{once:true}); }
   toast(it.name+' placed — drag to position');
 }
 function removeFromWall(id){ const it=findItem(id); if(!it)return; it.placed=false; if(selectedId===id) deselect();
-  renderWall(); renderTray(); save(); }
+  renderWall(); renderTray(); save(); commit(); }
 function deleteItem(id){ const i=state.items.findIndex(x=>x.id===id); if(i<0)return;
-  if(selectedId===id) deselect(); state.items.splice(i,1); renderWall(); renderTray(); save(); }
+  if(selectedId===id) deselect(); state.items.splice(i,1); renderWall(); renderTray(); save(); commit(); }
 function duplicateItem(id){
   const it=findItem(id); if(!it)return;
   const c=Object.assign({},it,{id:uid(),name:it.name+' copy',z:zNext(),
     x:clamp1D(it.x+2,it.wIn,state.wall.wIn), y:clamp1D(it.y+2,it.hIn,state.wall.hIn)});
-  state.items.push(c); renderWall(); renderTray(); selectItem(c.id); save();
+  state.items.push(c); renderWall(); renderTray(); selectItem(c.id); save(); commit();
 }
 
 /* ------------------------------ DRAG --------------------------------- */
@@ -949,7 +991,7 @@ function attachDrag(el,it){
   function end(e){
     if(pid===null||(e&&e.pointerId!==pid)) return;
     try{ el.releasePointerCapture(pid); }catch(_){}
-    pid=null; clearAlignGuides(); if(dragging){ el.classList.remove('dragging'); save(); } dragging=false;
+    pid=null; clearAlignGuides(); if(dragging){ el.classList.remove('dragging'); save(); commit(); } dragging=false;
   }
   el.addEventListener('pointerup',end);
   el.addEventListener('pointercancel',end);
@@ -1111,11 +1153,11 @@ function saveDim(){
     renderWall(); renderTray(); renderReadout();
   }else{
     const it={ id:uid(), name, type:photo?'photo':'blank', src:photo?pending.src:null,
-      color: photo?'#c9b79c':$('dimColor').value, wIn, hIn, x:0, y:0, placed:false, z:0 };
+      color: photo?'#c9b79c':$('dimColor').value, wIn, hIn, x:0, y:0, placed:false, z:0, note:'' };
     state.items.push(it); renderTray();
     toast(name+' added to inventory');
   }
-  pending=null; $('dimModal').classList.remove('show'); save();
+  pending=null; $('dimModal').classList.remove('show'); save(); commit();
 }
 
 /* ============================ EXPORT / IMPORT ======================= */
@@ -1184,7 +1226,7 @@ function setWallFromInputs(){
   const wv=parseFloat($('wallW').value), hv=parseFloat($('wallH').value);
   if(wv>0) state.wall.wIn=toIn(wv,state.unit);
   if(hv>0) state.wall.hIn=toIn(hv,state.unit);
-  reclampAll(); layout(); renderWall(); renderReadout(); save();
+  reclampAll(); layout(); renderWall(); renderReadout(); save(); commit();
 }
 function closeMenu(){ $('menu').classList.remove('show'); }
 function closeProjMenu(){ $('projMenu').classList.remove('show'); }
@@ -1207,10 +1249,10 @@ function renderProjects(){
   mk('✎  Rename this wall', renameProject);
   if(store.projects.length>1) mk('🗑  Delete this wall', ()=>deleteProject(state.id), 'danger');
 }
-function applyActive(){ selectedId=null; clearAlignGuides(); syncControls(); layout(); renderWall(); renderTray(); renderReadout(); renderProjects(); }
+function applyActive(){ selectedId=null; clearAlignGuides(); syncControls(); layout(); renderWall(); renderTray(); renderReadout(); renderProjects(); histReset(); }
 function newProject(){ const p=blankProject('Wall '+(store.projects.length+1)); store.projects.push(p); store.activeId=p.id; state=p; applyActive(); closeProjMenu(); save(); toast('New wall created'); }
 function switchProject(id){ const p=store.projects.find(x=>x.id===id); if(!p)return; store.activeId=id; state=p; applyActive(); closeProjMenu(); save(); }
-function renameProject(){ const n=prompt('Rename this wall:', state.name); if(n!=null){ const t=n.trim(); if(t) state.name=t.slice(0,40); syncControls(); renderProjects(); save(); } closeProjMenu(); }
+function renameProject(){ const n=prompt('Rename this wall:', state.name); if(n!=null){ const t=n.trim(); if(t) state.name=t.slice(0,40); syncControls(); renderProjects(); save(); commit(); } closeProjMenu(); }
 function deleteProject(id){ if(store.projects.length<=1) return; const i=store.projects.findIndex(p=>p.id===id); if(i<0)return;
   if(!confirm('Delete “'+store.projects[i].name+'” and all its frames?')) return;
   store.projects.splice(i,1); store.activeId=store.projects[Math.min(i,store.projects.length-1)].id; state=activeProject(); applyActive(); closeProjMenu(); save(); }
@@ -1219,6 +1261,26 @@ function deleteProject(id){ if(store.projects.length<=1) return; const i=store.p
 let toastT=null;
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+/* ============================ SHOPPING LIST ======================= */
+let shopText='';
+function renderShop(){
+  const body=$('shopBody'); body.textContent='';
+  if(!state.items.length){ const e=document.createElement('p'); e.className='hint'; e.textContent='No frames yet — add some to build your shopping list.'; body.appendChild(e); shopText=''; return; }
+  const groups=new Map();
+  state.items.forEach(it=>{ const k=it.wIn+'x'+it.hIn; if(!groups.has(k)) groups.set(k,{wIn:it.wIn,hIn:it.hIn,count:0}); groups.get(k).count++; });
+  const arr=[...groups.values()].sort((a,b)=>(b.wIn*b.hIn)-(a.wIn*a.hIn));
+  const list=document.createElement('div'); list.className='shop-list';
+  arr.forEach(g=>{ const row=document.createElement('div'); row.className='shop-row';
+    const q=document.createElement('span'); q.className='shop-q'; q.textContent=g.count+'×';
+    const sz=document.createElement('span'); sz.className='shop-sz'; sz.textContent=fmtLen(g.wIn)+' × '+fmtLen(g.hIn);
+    row.appendChild(q); row.appendChild(sz); list.appendChild(row); });
+  body.appendChild(list);
+  const tot=document.createElement('p'); tot.className='shop-total';
+  tot.textContent=state.items.length+' frame'+(state.items.length>1?'s':'')+' · '+arr.length+' size'+(arr.length>1?'s':'')+' · “'+state.name+'”';
+  body.appendChild(tot);
+  shopText=arr.map(g=>g.count+' × '+fmtLen(g.wIn)+' × '+fmtLen(g.hIn)).join('\n');
+}
 
 /* ============================== WIRING ============================== */
 function wire(){
@@ -1238,6 +1300,16 @@ function wire(){
     if(v>=0) state.guides.wireSagIn=toIn(v,state.unit); renderReadout(); save(); });
   // projects switcher
   $('projBtn').addEventListener('click',e=>{ e.stopPropagation(); closeMenu(); renderProjects(); $('projMenu').classList.toggle('show'); });
+  // undo / redo
+  $('undoBtn').addEventListener('click',undo);
+  $('redoBtn').addEventListener('click',redo);
+  addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey) && !e.altKey && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)){
+      const k=e.key.toLowerCase();
+      if(k==='z' && !e.shiftKey){ e.preventDefault(); undo(); }
+      else if(k==='y' || (k==='z'&&e.shiftKey)){ e.preventDefault(); redo(); }
+    }
+  });
   // menu
   $('menuBtn').addEventListener('click',e=>{ e.stopPropagation(); closeProjMenu(); $('menu').classList.toggle('show'); });
   document.addEventListener('click',e=>{
@@ -1247,9 +1319,13 @@ function wire(){
   $('miExport').addEventListener('click',exportJSON);
   $('miImport').addEventListener('click',()=>{ $('importInput').click(); closeMenu(); });
   $('miPng').addEventListener('click',exportPNG);
+  $('miShop').addEventListener('click',()=>{ renderShop(); $('shopModal').classList.add('show'); closeMenu(); });
+  $('shopClose').addEventListener('click',()=>$('shopModal').classList.remove('show'));
+  $('shopOk').addEventListener('click',()=>$('shopModal').classList.remove('show'));
+  $('shopCopy').addEventListener('click',()=>{ if(navigator.clipboard&&shopText){ navigator.clipboard.writeText('Wall Framer — '+state.name+'\n'+shopText).then(()=>toast('List copied')).catch(()=>toast('Copy failed')); } else toast(shopText?'Copy not available':'Nothing to copy'); });
   $('miClear').addEventListener('click',()=>{ if(confirm('Clear this wall — remove all its frames and reset its size?')){
     const id=state.id, name=state.name; Object.assign(state, projDefaults(), {id, name}); selectedId=null;
-    syncControls(); layout(); renderWall(); renderTray(); renderReadout(); save(); closeMenu(); } });
+    syncControls(); layout(); renderWall(); renderTray(); renderReadout(); save(); commit(); closeMenu(); } });
   $('miHelp').addEventListener('click',()=>{ $('helpModal').classList.add('show'); closeMenu(); });
   $('importInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) importJSON(f); e.target.value=''; });
   // add frames
@@ -1281,6 +1357,8 @@ function wire(){
   $('actDup').addEventListener('click',()=> selectedId&&duplicateItem(selectedId));
   $('actRemove').addEventListener('click',()=> selectedId&&removeFromWall(selectedId));
   $('actDelete').addEventListener('click',()=> selectedId&&deleteItem(selectedId));
+  $('roNote').addEventListener('input',()=>{ const it=findItem(selectedId); if(it){ it.note=$('roNote').value.slice(0,200); save(); } });
+  $('roNote').addEventListener('change',()=>{ const it=findItem(selectedId); if(it){ renderWall(); commit(); } });
   // help
   $('helpClose').addEventListener('click',()=>$('helpModal').classList.remove('show'));
   $('helpOk').addEventListener('click',()=>$('helpModal').classList.remove('show'));
@@ -1299,7 +1377,7 @@ function wire(){
     else return;
     e.preventDefault();
     const node=$('items').querySelector('.item[data-id="'+it.id+'"]'); if(node) placeNode(node,it);
-    renderReadout(); save();
+    renderReadout(); save(); commit();
   });
   // tip
   $('tipDismiss').addEventListener('click',()=>{ $('tip').classList.remove('show'); try{localStorage.setItem('wf_tip','1');}catch(_){} });
@@ -1318,6 +1396,7 @@ async function init(){
   if(loaded) migrateStore(loaded); else freshStore();
   state=activeProject();
   reclampAll();
+  histReset();
   syncControls();
   requestAnimationFrame(()=>{ layout(); renderWall(); renderTray(); renderReadout(); });
   // one-time tip if empty + first run
