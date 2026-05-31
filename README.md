@@ -13,12 +13,16 @@ dependencies, no accounts, works offline.
 - 🖼️ **Add frames** two ways: snap a **photo** (crop, one-tap auto-trim, rotate,
   EXIF auto-corrected) or add a **blank** sized rectangle. Common sizes
   (5×7, 8×10, 16×20, 24×36…) are one-tap presets.
-- ✋ **Drag to arrange** with finger or mouse. Optional **grid** + **snap-to-grid**
-  (independent toggles).
+- ✋ **Drag to arrange** with finger or mouse. Optional **grid**, **snap-to-grid**, and
+  **alignment guides** that snap a frame to the wall's center or to other frames'
+  edges/centers (all independent toggles; hold **Alt** to drag freely).
+- 🧱 **Multiple walls** — keep a separate layout per room ("Living Room", "Hallway"…);
+  switch, rename, and delete from the wall menu in the header.
 - 📏 **Exact measurements** — select a frame to see its position, center height, and
   the **nail height to mark** (accounts for wire sag). Toggle a 57″ eye-level guide.
-- 💾 **Auto-saves** locally (IndexedDB). **Export / import** a project file to move it
-  between devices. **Export a PNG** of your layout to carry to the wall.
+- 💾 **Auto-saves** locally (IndexedDB). **Export / import** all your walls as one
+  self-contained file to move between devices. **Export a PNG** of a layout to carry
+  to the wall.
 
 ## Run it locally
 
@@ -46,12 +50,20 @@ It's a **zero-config static site**:
 
 No `vercel.json` or build step is needed — Vercel serves `index.html` from the root.
 
+### Or: GitHub Pages (optional, free)
+
+A **Deploy to GitHub Pages** workflow is included. To use it: repo **Settings → Pages →
+Source: GitHub Actions**, then push — every push to `main` publishes the site. (Delete
+`.github/workflows/pages.yml` if you only want Vercel.) A **CI** workflow also validates
+`index.html` (structure + inline-JS syntax + assets) on every push.
+
 ## Phone + laptop workflow
 
 Snap & crop photos on your phone, then arrange on your laptop (or vice-versa):
-**⋯ menu → Export project** (photos travel inside the file) → **Import** on the other
-device. Real-time cloud sync is a planned **v2** (it needs a backend, intentionally
-left out to keep this simple).
+**⋯ menu → Export project** (every wall + its photos travel inside one file) →
+**Import** on the other device (importing *adds* the walls — it never overwrites what's
+already there). Real-time cloud sync would need a backend, intentionally left out to
+keep this simple.
 
 ## Tech
 

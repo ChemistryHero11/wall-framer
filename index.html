@@ -8,6 +8,18 @@
 <meta name="apple-mobile-web-app-title" content="Wall Framer">
 <title>Wall Framer — plan before you drill</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232F6E8F'/%3E%3Crect x='7' y='7' width='8' height='10' rx='1' fill='none' stroke='white' stroke-width='1.6'/%3E%3Crect x='18' y='12' width='7' height='9' rx='1' fill='none' stroke='white' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="description" content="Plan how to hang framed pictures on a wall — to scale — before you drill. Add your frames, drag them onto a to-scale wall, snap to a grid, and read off the exact nail height.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Wall Framer — plan before you drill">
+<meta property="og:description" content="Arrange your framed pictures on a to-scale wall before you hang them. Crop photos, drag to position, snap to a grid, and get the exact nail height to mark.">
+<meta property="og:image" content="og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Wall Framer — plan before you drill">
+<meta name="twitter:description" content="Arrange your framed pictures on a to-scale wall before you hang them.">
+<meta name="twitter:image" content="og.png">
 <style>
 /* ============================ DESIGN TOKENS ============================ */
 :root{
@@ -24,6 +36,7 @@
   --accent-soft:#E2EDF2;
   --grid:rgba(58,42,18,.06);
   --select:#2F6E8F;        /* selection reuses accent */
+  --delight:#2BB58C;       /* alignment guides + snap feedback (mint) */
   --eye:#C0673B;           /* 57" eye-level guide (clay) */
   --danger:#C0392B;
   --ok:#2BB58C;
@@ -64,6 +77,27 @@ header{
 .brand b{font-size:15px;font-weight:700;letter-spacing:-.2px;line-height:1}
 .brand small{display:block;font-size:11px;color:var(--ink-soft);margin-top:2px}
 .spacer{flex:1 1 auto}
+
+/* project (wall) switcher */
+.proj-wrap{position:relative}
+.proj{display:inline-flex;align-items:center;gap:5px;max-width:170px;border:1px solid var(--line-strong);
+  background:var(--surface-2);color:var(--ink);border-radius:var(--r-sm);padding:7px 10px;font-size:13px;font-weight:650;min-height:38px}
+.proj #projName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.proj .caret{color:var(--ink-soft);font-size:11px;flex:none}
+.proj-menu{position:absolute;top:calc(100% + 6px);left:0;width:236px;max-height:64vh;overflow:auto;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-2);padding:6px;z-index:60;display:none}
+.proj-menu.show{display:block}
+.pm-item{display:flex;align-items:center;gap:9px;width:100%;border:0;background:transparent;color:var(--ink);
+  padding:9px 10px;border-radius:var(--r-sm);font-size:14px;text-align:left;cursor:pointer}
+.pm-item:hover{background:var(--surface-2)}
+.pm-dot{width:8px;height:8px;border-radius:50%;background:transparent;border:1.5px solid var(--line-strong);flex:none}
+.pm-item.on .pm-dot{background:var(--accent);border-color:var(--accent)}
+.pm-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.pm-count{font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.proj-menu hr{border:0;border-top:1px solid var(--line);margin:6px 4px}
+.pm-act{display:flex;width:100%;border:0;background:transparent;color:var(--ink);padding:10px;border-radius:var(--r-sm);font-size:13.5px;text-align:left;cursor:pointer}
+.pm-act:hover{background:var(--surface-2)}
+.pm-act.danger{color:var(--danger)}
 
 .field{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft)}
 .field input[type=number]{
@@ -168,6 +202,10 @@ canvas.ruler{display:block}
   font-weight:700;color:#fff;background:var(--eye);padding:1px 5px;border-radius:4px}
 .wall.show-eye .eye-line{display:block}
 .items{position:absolute;inset:0}
+.align-guides{position:absolute;inset:0;pointer-events:none;z-index:9000}
+.aln{position:absolute;background:var(--delight)}
+.aln.v{top:0;bottom:0;width:2px;margin-left:-1px}
+.aln.h{left:0;right:0;height:2px;margin-top:-1px}
 
 .item{position:absolute;touch-action:none;-webkit-user-select:none;user-select:none;
   box-shadow:0 2px 6px rgba(16,24,40,.18),inset 0 0 0 1px rgba(0,0,0,.06);
@@ -342,6 +380,11 @@ canvas.ruler{display:block}
       <span><b>Wall Framer</b><small>plan before you drill</small></span>
     </div>
 
+    <div class="proj-wrap">
+      <button class="proj" id="projBtn" aria-haspopup="true" aria-label="Switch wall"><span id="projName">My wall</span><span class="caret">▾</span></button>
+      <div class="proj-menu" id="projMenu" role="menu"></div>
+    </div>
+
     <label class="field">Wall
       <input id="wallW" type="number" inputmode="decimal" min="1" step="0.5" aria-label="Wall width">
       <span class="times">×</span>
@@ -357,6 +400,7 @@ canvas.ruler{display:block}
       <span class="u" id="spacingUnit">in</span>
     </label>
     <button class="toggle" id="snapToggle" aria-pressed="true"><span class="dot"></span>Snap</button>
+    <button class="toggle" id="alignToggle" aria-pressed="true"><span class="dot"></span>Align</button>
     <button class="toggle" id="eyeToggle" aria-pressed="false"><span class="dot"></span>57″ line</button>
 
     <span class="spacer"></span>
@@ -376,7 +420,7 @@ canvas.ruler{display:block}
       </div>
       <p class="hint" style="margin:0 10px 6px">Used to compute exact nail height from the frame’s top edge.</p>
       <hr>
-      <button class="mi danger" id="miClear" role="menuitem">🗑 Clear everything</button>
+      <button class="mi danger" id="miClear" role="menuitem">🗑 Clear this wall</button>
       <button class="mi" id="miHelp" role="menuitem">❔ How it works</button>
     </div>
   </header>
@@ -403,6 +447,7 @@ canvas.ruler{display:block}
           <div class="wall grid" id="wall">
             <div class="eye-line" id="eyeLine" data-label="57″ eye level"></div>
             <div class="items" id="items"></div>
+            <div class="align-guides" id="alignGuides"></div>
             <div class="wall-empty">
               <div class="big">🖼️</div>
               <p id="emptyMsg">Set your wall size, then add your first frame from the inventory below.</p>
@@ -531,18 +576,23 @@ const WORK_CAP = 2000, OUT_CAP = 1400, JPEG_Q = 0.82;
 const CROP_DEFAULT = {x:.06, y:.06, w:.88, h:.88};
 const TRIM_CAP=400, TRIM_DIST=38, TRIM_MIN_AREA=.05, TRIM_MAX_AREA=.97, TRIM_FILL=.55, TRIM_PAD=.012;
 const SAFE_SRC = /^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+=*$/i;  // full-string validate (no quote/paren injection)
+const ALIGN_PX = 6;          // alignment-snap threshold (px)
 const loadImage = src=> new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=src; });
 
 /* ------------------------------- STATE ------------------------------- */
-const DEFAULT = ()=>({
+// A "project" = one wall + its frames + settings. `store` holds many; `state` is the active one.
+function projDefaults(){ return {
   v:1, unit:'in',
   wall:{wIn:96, hIn:60},
-  grid:{on:true, spacingIn:6, snap:true},
+  grid:{on:true, spacingIn:6, snap:true, align:true},
   guides:{eyeLevel:false, eyeLevelIn:57, wireSagIn:2.5},
-  items:[],
-  seq:0
-});
-let state = DEFAULT();
+  items:[], seq:0
+}; }
+let store = { v:2, activeId:null, pseq:0, projects:[] };
+let state = null;                                  // the active project (a reference into store.projects)
+function blankProject(name){ const p=projDefaults(); p.id='p'+(++store.pseq); p.name=name||'My wall'; return p; }
+function freshStore(){ store={v:2,activeId:null,pseq:0,projects:[]}; const p=blankProject('My wall'); store.projects.push(p); store.activeId=p.id; return p; }
+function activeProject(){ return store.projects.find(p=>p.id===store.activeId) || store.projects[0]; }
 let scale = 0, wallPxW = 0, wallPxH = 0;
 let selectedId = null;
 let persistOK = true;
@@ -585,7 +635,7 @@ async function flush(){
   if(!persistOK) return;
   if(saving){ dirtyAgain=true; return; }
   saving=true;
-  try{ await idb.set('project', typeof structuredClone==='function'? structuredClone(state) : JSON.parse(JSON.stringify(state))); }
+  try{ await idb.set('store', typeof structuredClone==='function'? structuredClone(store) : JSON.parse(JSON.stringify(store))); }
   catch(e){ persistOK=false; $('storeWarn').classList.add('show'); }
   saving=false;
   if(dirtyAgain){ dirtyAgain=false; flush(); }
@@ -594,22 +644,38 @@ async function flush(){
 addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flush(); });
 addEventListener('pagehide', flush);
 
-function migrate(s){
-  const d=DEFAULT();
-  if(!s||typeof s!=='object') return d;
-  s.v=s.v||1; s.unit=['in','cm','ft'].includes(s.unit)?s.unit:'in';
-  s.wall = Object.assign({}, d.wall, s.wall);
-  s.grid = Object.assign({}, d.grid, s.grid);
-  s.guides = Object.assign({}, d.guides, s.guides);
-  s.items = Array.isArray(s.items)? s.items.filter(validItem).map(cleanItem) : [];
-  s.seq = Number.isFinite(s.seq)? s.seq : s.items.length+1;
-  return s;
+function migrateProject(s){
+  const d=projDefaults(); if(!s||typeof s!=='object') s={};
+  const p={};
+  p.id = (typeof s.id==='string'&&s.id) ? s.id : ('p'+(++store.pseq));
+  p.name = (typeof s.name==='string'&&s.name.trim()) ? s.name.slice(0,40) : 'My wall';
+  p.v=1; p.unit=['in','cm','ft'].includes(s.unit)?s.unit:'in';
+  p.wall = Object.assign({}, d.wall, (s.wall&&typeof s.wall==='object')?s.wall:{});
+  p.grid = Object.assign({}, d.grid, (s.grid&&typeof s.grid==='object')?s.grid:{});
+  p.guides = Object.assign({}, d.guides, (s.guides&&typeof s.guides==='object')?s.guides:{});
+  p.items = Array.isArray(s.items)? s.items.filter(validItem).map(cleanItem) : [];
+  p.seq = Number.isFinite(s.seq)? s.seq : p.items.length+1;
+  if(!(p.wall.wIn>0)) p.wall.wIn=96; if(!(p.wall.hIn>0)) p.wall.hIn=60;
+  return p;
+}
+function migrateStore(raw){
+  store={v:2,activeId:null,pseq:Number.isFinite(raw&&raw.pseq)?raw.pseq:0,projects:[]};
+  if(raw && Array.isArray(raw.projects)){                       // new multi-wall format
+    store.projects = raw.projects.map(migrateProject);
+    store.activeId = raw.activeId;
+  } else if(raw && (Array.isArray(raw.items) || (raw.wall&&typeof raw.wall==='object'))){  // old single-wall → wrap
+    const p=migrateProject(raw); store.projects=[p]; store.activeId=p.id;
+  }
+  if(!store.projects.length) store.projects.push(blankProject('My wall'));
+  store.projects.forEach(p=>{ const n=parseInt(String(p.id).replace(/\D/g,''),10); if(Number.isFinite(n)&&n>store.pseq) store.pseq=n; });
+  if(!store.projects.find(p=>p.id===store.activeId)) store.activeId=store.projects[0].id;
+  return store;
 }
 function validItem(i){ return i && Number.isFinite(i.wIn)&&i.wIn>0 && Number.isFinite(i.hIn)&&i.hIn>0; }
 function cleanItem(i){
   const src = (typeof i.src==='string' && SAFE_SRC.test(i.src)) ? i.src : null;
   return {
-    id: typeof i.id==='string'? i.id : uid(),
+    id: (typeof i.id==='string'&&i.id)? i.id : ('itm'+Date.now().toString(36)+Math.floor(Math.random()*1e4)),
     name: typeof i.name==='string'? i.name.slice(0,40) : 'Frame',
     type: i.type==='photo'&&src ? 'photo':'blank',
     src,
@@ -641,6 +707,24 @@ function reclampAll(){
     i.y = clamp1D(i.y, i.hIn, state.wall.hIn);
   });
 }
+// ---- alignment guides: snap a dragged item's edge/center to wall center or other frames ----
+function alignAxis(cur,size,targets,thr){
+  let best=null;
+  for(const T of targets) for(const oa of [0,size/2,size]){ const cand=T-oa, d=Math.abs(cur-cand);
+    if(d<thr && (!best||d<best.d)) best={d,pos:cand,guide:T}; }
+  return best;
+}
+function axisTargets(axis,excludeId){
+  const w=state.wall, out = axis==='x'? [0,w.wIn/2,w.wIn] : [0,w.hIn/2,w.hIn];
+  for(const o of state.items){ if(!o.placed||o.id===excludeId) continue;
+    if(axis==='x') out.push(o.x,o.x+o.wIn/2,o.x+o.wIn); else out.push(o.y,o.y+o.hIn/2,o.y+o.hIn); }
+  return out;
+}
+function drawAlignGuides(gx,gy){ const g=$('alignGuides'); g.textContent='';
+  if(gx!=null){ const v=document.createElement('div'); v.className='aln v'; v.style.left=px(gx)+'px'; g.appendChild(v); }
+  if(gy!=null){ const h=document.createElement('div'); h.className='aln h'; h.style.top=px(gy)+'px'; g.appendChild(h); }
+}
+function clearAlignGuides(){ $('alignGuides').textContent=''; }
 
 /* ------------------------------ RULERS ------------------------------- */
 function niceStepIn(){
@@ -849,8 +933,14 @@ function attachDrag(el,it){
       dragging=true; el.classList.add('dragging');
     }
     let xIn=(e.clientX-rect.left-gdx)/scale, yIn=(e.clientY-rect.top-gdy)/scale;
-    if(state.grid.snap && !e.altKey){ xIn=snap(xIn,state.grid.spacingIn); yIn=snap(yIn,state.grid.spacingIn); }
+    const bypass=e.altKey; let gx=null, gy=null;
+    if(state.grid.align && !bypass){ const thr=ALIGN_PX/scale;
+      const ax=alignAxis(xIn,it.wIn,axisTargets('x',it.id),thr); if(ax){ xIn=ax.pos; gx=ax.guide; }
+      const ay=alignAxis(yIn,it.hIn,axisTargets('y',it.id),thr); if(ay){ yIn=ay.pos; gy=ay.guide; }
+    }
+    if(state.grid.snap && !bypass){ if(gx===null) xIn=snap(xIn,state.grid.spacingIn); if(gy===null) yIn=snap(yIn,state.grid.spacingIn); }
     xIn=clamp1D(xIn,it.wIn,state.wall.wIn); yIn=clamp1D(yIn,it.hIn,state.wall.hIn);
+    drawAlignGuides(gx,gy);
     if(xIn===it.x && yIn===it.y) return;            // skip no-op moves (common while snapped)
     it.x=xIn; it.y=yIn;
     el.style.left=px(xIn)+'px'; el.style.top=px(yIn)+'px';
@@ -859,7 +949,7 @@ function attachDrag(el,it){
   function end(e){
     if(pid===null||(e&&e.pointerId!==pid)) return;
     try{ el.releasePointerCapture(pid); }catch(_){}
-    pid=null; if(dragging){ el.classList.remove('dragging'); save(); } dragging=false;
+    pid=null; clearAlignGuides(); if(dragging){ el.classList.remove('dragging'); save(); } dragging=false;
   }
   el.addEventListener('pointerup',end);
   el.addEventListener('pointercancel',end);
@@ -1034,19 +1124,23 @@ function download(blob,fname){
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),2000);
 }
 function exportJSON(){
-  const blob=new Blob([JSON.stringify(state)],{type:'application/json'});
-  download(blob,'wall-framer-project.json'); toast('Project exported'); closeMenu();
+  const blob=new Blob([JSON.stringify(store)],{type:'application/json'});
+  download(blob,'wall-framer-project.json'); toast(store.projects.length>1?'All walls exported':'Project exported'); closeMenu();
 }
+function reclampProject(p){ p.items.forEach(i=>{ i.x=clamp1D(i.x,i.wIn,p.wall.wIn); i.y=clamp1D(i.y,i.hIn,p.wall.hIn); }); }
 function importJSON(file){
   const fr=new FileReader();
   fr.onload=()=>{ let data; try{ data=JSON.parse(fr.result); }catch(_){ toast('That file isn’t a valid project'); return; }
     if(!data||typeof data!=='object'){ toast('Unrecognized project file'); return; }
-    if(state.items.length && !confirm('Replace your current project with the imported one?')) return;
-    state=migrate(data);
-    // regenerate ids to avoid any collisions
-    let n=state.seq; state.items.forEach(i=>{ i.id='it'+(++n); }); state.seq=n;
-    selectedId=null; reclampAll(); syncControls(); layout(); renderWall(); renderTray(); renderReadout(); save();
-    toast('Project imported'); closeMenu();
+    let incoming;
+    if(Array.isArray(data.projects)) incoming=data.projects.map(migrateProject);
+    else if(Array.isArray(data.items) || (data.wall&&typeof data.wall==='object')) incoming=[migrateProject(data)];
+    else { toast('Unrecognized project file'); return; }
+    if(!incoming.length){ toast('No walls found in file'); return; }
+    incoming.forEach(p=>{ p.id='p'+(++store.pseq); reclampProject(p); });   // fresh ids; never clobbers existing walls
+    store.projects.push(...incoming); store.activeId=incoming[0].id; state=activeProject();
+    applyActive(); save(); closeMenu();
+    toast(incoming.length>1? incoming.length+' walls imported' : 'Wall imported');
   };
   fr.readAsText(file);
 }
@@ -1080,9 +1174,11 @@ function syncControls(){
   $('unitSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.u===u));
   $('gridToggle').setAttribute('aria-pressed',state.grid.on);
   $('snapToggle').setAttribute('aria-pressed',state.grid.snap);
+  $('alignToggle').setAttribute('aria-pressed',state.grid.align);
   $('eyeToggle').setAttribute('aria-pressed',state.guides.eyeLevel);
   $('wall').classList.toggle('grid',state.grid.on);
   $('spacingField').style.opacity=state.grid.on?'1':'.5';
+  $('projName').textContent=state.name;
 }
 function setWallFromInputs(){
   const wv=parseFloat($('wallW').value), hv=parseFloat($('wallH').value);
@@ -1091,6 +1187,33 @@ function setWallFromInputs(){
   reclampAll(); layout(); renderWall(); renderReadout(); save();
 }
 function closeMenu(){ $('menu').classList.remove('show'); }
+function closeProjMenu(){ $('projMenu').classList.remove('show'); }
+
+/* ============================ PROJECTS (walls) ===================== */
+function renderProjects(){
+  $('projName').textContent=state.name;
+  const m=$('projMenu'); m.textContent='';
+  store.projects.forEach(p=>{
+    const b=document.createElement('button'); b.className='pm-item'+(p.id===store.activeId?' on':'');
+    const dot=document.createElement('span'); dot.className='pm-dot';
+    const nm=document.createElement('span'); nm.className='pm-name'; nm.textContent=p.name;
+    const cnt=document.createElement('span'); cnt.className='pm-count'; cnt.textContent=p.items.length||'';
+    b.appendChild(dot); b.appendChild(nm); b.appendChild(cnt);
+    b.addEventListener('click',()=>switchProject(p.id)); m.appendChild(b);
+  });
+  m.appendChild(document.createElement('hr'));
+  const mk=(txt,fn,cls)=>{ const b=document.createElement('button'); b.className='pm-act'+(cls?' '+cls:''); b.textContent=txt; b.addEventListener('click',fn); m.appendChild(b); };
+  mk('＋  New wall', newProject);
+  mk('✎  Rename this wall', renameProject);
+  if(store.projects.length>1) mk('🗑  Delete this wall', ()=>deleteProject(state.id), 'danger');
+}
+function applyActive(){ selectedId=null; clearAlignGuides(); syncControls(); layout(); renderWall(); renderTray(); renderReadout(); renderProjects(); }
+function newProject(){ const p=blankProject('Wall '+(store.projects.length+1)); store.projects.push(p); store.activeId=p.id; state=p; applyActive(); closeProjMenu(); save(); toast('New wall created'); }
+function switchProject(id){ const p=store.projects.find(x=>x.id===id); if(!p)return; store.activeId=id; state=p; applyActive(); closeProjMenu(); save(); }
+function renameProject(){ const n=prompt('Rename this wall:', state.name); if(n!=null){ const t=n.trim(); if(t) state.name=t.slice(0,40); syncControls(); renderProjects(); save(); } closeProjMenu(); }
+function deleteProject(id){ if(store.projects.length<=1) return; const i=store.projects.findIndex(p=>p.id===id); if(i<0)return;
+  if(!confirm('Delete “'+store.projects[i].name+'” and all its frames?')) return;
+  store.projects.splice(i,1); store.activeId=store.projects[Math.min(i,store.projects.length-1)].id; state=activeProject(); applyActive(); closeProjMenu(); save(); }
 
 /* ============================== TOAST ============================== */
 let toastT=null;
@@ -1107,19 +1230,26 @@ function wire(){
   // grid / snap / eye
   $('gridToggle').addEventListener('click',()=>{ state.grid.on=!state.grid.on; syncControls(); layout(); save(); });
   $('snapToggle').addEventListener('click',()=>{ state.grid.snap=!state.grid.snap; syncControls(); save(); });
+  $('alignToggle').addEventListener('click',()=>{ state.grid.align=!state.grid.align; syncControls(); save(); });
   $('eyeToggle').addEventListener('click',()=>{ state.guides.eyeLevel=!state.guides.eyeLevel; syncControls(); positionEyeLine(); renderReadout(); save(); });
   $('spacing').addEventListener('change',()=>{ const v=parseFloat($('spacing').value);
     if(v>0){ state.grid.spacingIn=clamp(toIn(v,state.unit),0.25,Math.max(state.wall.wIn,state.wall.hIn)); } syncControls(); layout(); save(); });
   $('wireSag').addEventListener('change',()=>{ const v=parseFloat($('wireSag').value);
     if(v>=0) state.guides.wireSagIn=toIn(v,state.unit); renderReadout(); save(); });
+  // projects switcher
+  $('projBtn').addEventListener('click',e=>{ e.stopPropagation(); closeMenu(); renderProjects(); $('projMenu').classList.toggle('show'); });
   // menu
-  $('menuBtn').addEventListener('click',e=>{ e.stopPropagation(); $('menu').classList.toggle('show'); });
-  document.addEventListener('click',e=>{ if(!$('menu').contains(e.target)&&e.target!==$('menuBtn')) closeMenu(); });
+  $('menuBtn').addEventListener('click',e=>{ e.stopPropagation(); closeProjMenu(); $('menu').classList.toggle('show'); });
+  document.addEventListener('click',e=>{
+    if(!$('menu').contains(e.target)&&e.target!==$('menuBtn')) closeMenu();
+    if(!$('projMenu').contains(e.target)&&!$('projBtn').contains(e.target)) closeProjMenu();
+  });
   $('miExport').addEventListener('click',exportJSON);
   $('miImport').addEventListener('click',()=>{ $('importInput').click(); closeMenu(); });
   $('miPng').addEventListener('click',exportPNG);
-  $('miClear').addEventListener('click',()=>{ if(confirm('Clear the wall and all frames? This cannot be undone.')){
-    state=DEFAULT(); selectedId=null; syncControls(); layout(); renderWall(); renderTray(); renderReadout(); save(); closeMenu(); } });
+  $('miClear').addEventListener('click',()=>{ if(confirm('Clear this wall — remove all its frames and reset its size?')){
+    const id=state.id, name=state.name; Object.assign(state, projDefaults(), {id, name}); selectedId=null;
+    syncControls(); layout(); renderWall(); renderTray(); renderReadout(); save(); closeMenu(); } });
   $('miHelp').addEventListener('click',()=>{ $('helpModal').classList.add('show'); closeMenu(); });
   $('importInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) importJSON(f); e.target.value=''; });
   // add frames
@@ -1184,8 +1314,9 @@ async function init(){
   wire();
   // detect file:// (storage often unavailable) early
   let loaded=null;
-  try{ loaded=await idb.get('project'); }catch(_){ persistOK=false; $('storeWarn').classList.add('show'); }
-  if(loaded) state=migrate(loaded);
+  try{ loaded=await idb.get('store'); if(!loaded) loaded=await idb.get('project'); }catch(_){ persistOK=false; $('storeWarn').classList.add('show'); }
+  if(loaded) migrateStore(loaded); else freshStore();
+  state=activeProject();
   reclampAll();
   syncControls();
   requestAnimationFrame(()=>{ layout(); renderWall(); renderTray(); renderReadout(); });

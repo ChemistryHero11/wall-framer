@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <pattern id="g" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="rgba(29,35,48,0.06)" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="#F6F1E9"/>
+  <rect width="1200" height="630" fill="url(#g)"/>
+
+  <!-- brand -->
+  <rect x="80" y="92" width="64" height="64" rx="14" fill="#2F6E8F"/>
+  <rect x="98" y="110" width="17" height="22" rx="2" fill="none" stroke="#fff" stroke-width="3.4"/>
+  <rect x="120" y="120" width="14" height="18" rx="2" fill="none" stroke="#fff" stroke-width="3.4"/>
+  <text x="162" y="140" font-size="40" font-weight="800" fill="#2A2620">Wall Framer</text>
+
+  <!-- headline -->
+  <text x="80" y="258" font-size="78" font-weight="800" fill="#2A2620">Plan before</text>
+  <text x="80" y="346" font-size="78" font-weight="800" fill="#2A2620">you drill.</text>
+  <text x="84" y="408" font-size="29" font-weight="600" fill="#2F6E8F">Arrange your framed pictures on a to-scale</text>
+  <text x="84" y="448" font-size="29" font-weight="600" fill="#2F6E8F">wall — then hang with confidence.</text>
+
+  <!-- feature chips -->
+  <g font-size="22" font-weight="700" fill="#6B6356">
+    <rect x="84" y="496" width="158" height="46" rx="23" fill="#FBF8F4" stroke="#DED6C8"/>
+    <text x="108" y="525">Crop photos</text>
+    <rect x="256" y="496" width="132" height="46" rx="23" fill="#FBF8F4" stroke="#DED6C8"/>
+    <text x="280" y="525">Snap grid</text>
+    <rect x="402" y="496" width="150" height="46" rx="23" fill="#FBF8F4" stroke="#DED6C8"/>
+    <text x="426" y="525">Nail height</text>
+  </g>
+
+  <!-- mini to-scale wall -->
+  <g transform="translate(762,150)">
+    <rect x="0" y="0" width="360" height="330" rx="6" fill="#FBF8F4" stroke="#C8BEAC" stroke-width="2"/>
+    <line x1="0" y1="44" x2="360" y2="44" stroke="#C0673B" stroke-width="2" stroke-dasharray="8 6"/>
+    <rect x="30" y="74" width="100" height="150" fill="#b9c6d2" stroke="rgba(0,0,0,0.14)"/>
+    <rect x="150" y="92" width="80" height="100" fill="#d8c7a8" stroke="rgba(0,0,0,0.14)"/>
+    <rect x="252" y="84" width="72" height="92" fill="#cbb0a6" stroke="rgba(0,0,0,0.14)"/>
+    <rect x="160" y="212" width="62" height="78" fill="#bcd0c4" stroke="rgba(0,0,0,0.14)"/>
+    <rect x="27" y="71" width="106" height="156" fill="none" stroke="#2F6E8F" stroke-width="3"/>
+  </g>
+</svg>
