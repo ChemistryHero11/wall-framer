@@ -1,0 +1,18 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+.idea/
+.vscode/
+
+# Local tooling (Claude Code preview-server config, session files, etc.)
+.claude/
+
+# Dependencies / build output (none needed for this static app)
+node_modules/
+dist/
+build/
+
+# Vercel
+.vercel
