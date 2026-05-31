@@ -373,6 +373,14 @@ canvas.ruler{display:block}
 .ro-note input{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:var(--r-sm);font-size:13.5px;background:var(--surface)}
 .note-dot{position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;font-size:10px;box-shadow:var(--shadow-1)}
 
+/* onboarding steps */
+.steps{display:flex;flex-direction:column;gap:12px;margin:4px 0}
+.step{display:flex;gap:12px;align-items:flex-start}
+.step .ico{width:42px;height:42px;border-radius:var(--r);background:var(--accent-soft);color:var(--accent);
+  display:grid;place-items:center;font-size:21px;flex:none}
+.step .txt b{display:block;font-size:14.5px;margin-bottom:2px}
+.step .txt span{font-size:13px;color:var(--ink-soft);line-height:1.45}
+
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 
 /* ---- collapsible controls (⚙) + readout peek — keeps the WALL the hero on phones ---- */
@@ -636,19 +644,17 @@ canvas.ruler{display:block}
 <!-- ============ HELP MODAL ============ -->
 <div class="modal" id="helpModal">
   <div class="card">
-    <div class="card-head"><h3>How it works</h3><button class="x" id="helpClose" aria-label="Close">✕</button></div>
+    <div class="card-head"><h3 id="helpTitle">How it works</h3><button class="x" id="helpClose" aria-label="Close">✕</button></div>
     <div class="card-body">
-      <ol style="margin:0;padding-left:20px;line-height:1.6;font-size:14px">
-        <li><b>Measure your wall</b> and type its width × height up top. Pick your units.</li>
-        <li><b>Add each frame</b> — snap a <b>📷 Photo</b> (crop to the frame) or add a <b>▭ Blank</b> rectangle. Enter each frame’s real width &amp; height.</li>
-        <li><b>Tap a frame</b> in the inventory to drop it on the wall, then drag it with your finger or mouse.</li>
-        <li>Turn on <b>Grid</b> + <b>Snap</b> for neat alignment. Toggle the <b>57″ line</b> for eye-level.</li>
-        <li>Select a frame to see its exact position and the <b>nail height</b> to mark — then hang it for real.</li>
-      </ol>
-      <p class="hint"><b>Phone → laptop:</b> use <b>⋯ → Export project</b> to save a file, send it to your other device, and <b>Import</b> it there. (Photos travel inside the file.)</p>
-      <p class="hint"><b>Tip:</b> for camera capture and saved photos on a phone, open this from a web host or a local server rather than double-clicking the file.</p>
+      <p class="hint" style="margin-top:0">Plan exactly where your pictures go — before a single hole goes in the wall. Three quick steps:</p>
+      <div class="steps">
+        <div class="step"><div class="ico">📏</div><div class="txt"><b>1 · Set your wall size</b><span>Measure your wall, then tap <b>⚙</b> (top-right) to type its width × height. On a computer it’s right in the toolbar.</span></div></div>
+        <div class="step"><div class="ico">🖼️</div><div class="txt"><b>2 · Add your frames</b><span>Tap <b>📷 Photo</b> to snap a picture of each frame (crop it — we suggest the size for you), or <b>▭ Blank frame</b> for a plain rectangle.</span></div></div>
+        <div class="step"><div class="ico">✋</div><div class="txt"><b>3 · Arrange &amp; hang</b><span>Tap a frame to drop it on the wall, then drag to position. On a phone, <b>pinch to zoom</b>. Select a frame to see the exact <b>nail height</b> to mark — then hang it!</span></div></div>
+      </div>
+      <p class="hint">Everything saves automatically. <b>Sign in</b> from the <b>⋯</b> menu to keep your phone and computer in sync.</p>
     </div>
-    <div class="card-foot"><button class="primary" id="helpOk">Got it</button></div>
+    <div class="card-foot"><button class="primary" id="helpOk">Get started</button></div>
   </div>
 </div>
 
@@ -688,10 +694,6 @@ canvas.ruler{display:block}
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="tip" id="tip">
-  👋 Start by setting your <b>wall size</b> above, then add a frame with <b>📷 Photo</b> or <b>▭ Blank frame</b>.
-  <div><button id="tipDismiss">Got it</button></div>
-</div>
 
 <script>
 "use strict";
@@ -1580,7 +1582,7 @@ function wire(){
   $('miClear').addEventListener('click',()=>{ if(confirm('Clear this wall — remove all its frames and reset its size?')){
     const id=state.id, name=state.name; Object.assign(state, projDefaults(), {id, name}); selectedId=null;
     syncControls(); layout(); renderWall(); renderTray(); renderReadout(); save(); commit(); closeMenu(); } });
-  $('miHelp').addEventListener('click',()=>{ $('helpModal').classList.add('show'); closeMenu(); });
+  $('miHelp').addEventListener('click',()=>{ $('helpTitle').textContent='How it works'; $('helpModal').classList.add('show'); closeMenu(); });
   // cloud sync
   $('cloudSetupBtn').addEventListener('click',()=>openSync('connect'));
   $('signinBtn').addEventListener('click',()=>openSync(syncCfg()?'signin':'connect'));
@@ -1640,8 +1642,6 @@ function wire(){
     const node=$('items').querySelector('.item[data-id="'+it.id+'"]'); if(node) placeNode(node,it);
     renderReadout(); save(); commit();
   });
-  // tip
-  $('tipDismiss').addEventListener('click',()=>{ $('tip').classList.remove('show'); try{localStorage.setItem('wf_tip','1');}catch(_){} });
   // responsive relayout
   let raf=null; const ro=new ResizeObserver(()=>{ cancelAnimationFrame(raf); raf=requestAnimationFrame(layout); });
   ro.observe($('stageHost'));
@@ -1660,9 +1660,10 @@ async function init(){
   histReset();
   syncControls();
   requestAnimationFrame(()=>{ layout(); renderWall(); renderTray(); renderReadout(); });
-  // one-time tip if empty + first run
-  let seen='1'; try{ seen=localStorage.getItem('wf_tip'); }catch(_){}
-  if(!seen && state.items.length===0) setTimeout(()=>$('tip').classList.add('show'),500);
+  // gentle first-run intro
+  let seen='1'; try{ seen=localStorage.getItem('wf_welcome'); }catch(_){}
+  if(!seen){ try{ localStorage.setItem('wf_welcome','1'); }catch(_){}
+    setTimeout(()=>{ $('helpTitle').textContent='Welcome to Wall Framer 👋'; $('helpModal').classList.add('show'); }, 450); }
   initSync();
 }
 init();
