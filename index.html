@@ -717,7 +717,7 @@ addEventListener('pagehide', flush);
 
 /* ---------------------- CLOUD SYNC (Supabase, optional) ---------------- */
 // Hardcode these to enable sync for everyone; otherwise users connect in-app.
-const SUPABASE = { url:'', anonKey:'' };
+const SUPABASE = { url:'https://tqdlbdsotfpdiuulwpse.supabase.co', anonKey:'sb_publishable_RL50uw2owGWvtBrWL1NyRA_VhTgcqAn' };
 function syncCfg(){
   if(SUPABASE.url && SUPABASE.anonKey) return SUPABASE;
   try{ const u=localStorage.getItem('wf_sb_url'), k=localStorage.getItem('wf_sb_key'); if(u&&k) return {url:u,anonKey:k}; }catch(_){}
