@@ -189,7 +189,7 @@ canvas.ruler{display:block}
 .wall{grid-column:2;grid-row:2;position:relative;background:var(--wall);
   border-radius:4px;box-shadow:inset 0 0 0 1px var(--line),var(--shadow-2);
   background-image:linear-gradient(135deg,rgba(255,255,255,.5),rgba(0,0,0,.015));
-  touch-action:none;-webkit-user-select:none;user-select:none}
+  touch-action:pan-x pan-y;-webkit-user-select:none;user-select:none}
 .wall.grid{
   background-image:
     linear-gradient(to right,var(--grid) 1px,transparent 1px),
@@ -202,7 +202,7 @@ canvas.ruler{display:block}
 .eye-line::after{content:attr(data-label);position:absolute;right:4px;top:-16px;font-size:10px;
   font-weight:700;color:#fff;background:var(--eye);padding:1px 5px;border-radius:4px}
 .wall.show-eye .eye-line{display:block}
-.items{position:absolute;inset:0}
+.items{position:absolute;inset:0;touch-action:pan-x pan-y}
 .align-guides{position:absolute;inset:0;pointer-events:none;z-index:9000}
 .aln{position:absolute;background:var(--delight)}
 .aln.v{top:0;bottom:0;width:2px;margin-left:-1px}
@@ -261,6 +261,16 @@ canvas.ruler{display:block}
 .stat .v{font-size:15px;font-weight:650;font-family:var(--mono);font-variant-numeric:tabular-nums;margin-top:2px}
 .stat.hi{background:var(--accent-soft);border-color:#cfd2fb}
 .stat.hi .v{color:var(--accent)}
+
+/* zoom + pan */
+.stage-host.zoomed{place-items:start}
+.zoom-ctrl{position:absolute;top:12px;right:14px;z-index:40;display:flex;align-items:center;gap:2px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill);box-shadow:var(--shadow-1);padding:3px}
+.zoom-ctrl button{border:0;background:transparent;color:var(--ink);min-width:34px;height:34px;
+  border-radius:var(--r-pill);font-size:18px;font-weight:700;display:grid;place-items:center}
+.zoom-ctrl #zoomPct{min-width:46px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink-soft)}
+.zoom-ctrl button:hover{background:var(--surface-2)}
+.presets button.suggested{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
 
 /* ============================ MENU POPOVER ============================ */
 .menu{position:absolute;top:54px;right:12px;width:280px;background:var(--surface);
@@ -533,6 +543,12 @@ canvas.ruler{display:block}
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="zoom-ctrl" id="zoomCtrl">
+        <button id="zoomOut" aria-label="Zoom out">−</button>
+        <button id="zoomPct" aria-label="Fit wall to screen" title="Tap to fit whole wall">100%</button>
+        <button id="zoomIn" aria-label="Zoom in">＋</button>
       </div>
 
       <!-- measurement readout -->
@@ -967,13 +983,17 @@ function drawRuler(canvas,lengthIn,horizontal){
 const getCss = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
 /* ------------------------------ LAYOUT ------------------------------- */
+let zoom=1, multiTouch=false, dragAbort=false;
+const ZOOM_MIN=1, ZOOM_MAX=8;
 function layout(){
   const host=$('stageHost');
   const availW=host.clientWidth-RULER_L-32, availH=host.clientHeight-RULER_T-32;
-  scale=computeScale(state.wall.wIn,state.wall.hIn,availW,availH);
+  const fit=computeScale(state.wall.wIn,state.wall.hIn,availW,availH);
   const wall=$('wall');
-  if(!(scale>0)){ wall.classList.add('is-empty'); wall.style.width='220px'; wall.style.height='150px';
-    $('rulerTop').style.width=$('rulerLeft').style.height='0px'; return; }
+  if(!(fit>0)){ scale=0; wall.classList.add('is-empty'); wall.style.width='220px'; wall.style.height='150px';
+    $('rulerTop').style.width=$('rulerLeft').style.height='0px'; host.classList.remove('zoomed'); return; }
+  zoom=clamp(zoom,ZOOM_MIN,ZOOM_MAX); scale=fit*zoom;
+  host.classList.toggle('zoomed', zoom>1.001);
   wallPxW=state.wall.wIn*scale; wallPxH=state.wall.hIn*scale;
   wall.style.width=Math.round(wallPxW)+'px'; wall.style.height=Math.round(wallPxH)+'px';
   wall.style.setProperty('--g',(state.grid.spacingIn*scale)+'px');
@@ -981,12 +1001,50 @@ function layout(){
   drawRuler($('rulerLeft'),state.wall.hIn,false);
   positionItems();
   positionEyeLine();
+  updateZoomUI();
 }
 function positionEyeLine(){
   const e=$('eyeLine'), show=state.guides.eyeLevel && state.guides.eyeLevelIn<state.wall.hIn;
   $('wall').classList.toggle('show-eye',show);
   if(show){ e.style.top=px(state.wall.hIn-state.guides.eyeLevelIn)+'px';
     e.dataset.label = fmtLen(state.guides.eyeLevelIn)+' eye level'; }
+}
+/* ------------------------------- ZOOM / PAN -------------------------- */
+function updateZoomUI(){ const p=$('zoomPct'); if(p) p.textContent=Math.round(zoom*100)+'%'; }
+function zoomAt(nz, cx, cy){
+  const host=$('stageHost'), hr=host.getBoundingClientRect();
+  nz=clamp(nz,ZOOM_MIN,ZOOM_MAX); if(Math.abs(nz-zoom)<1e-3){ updateZoomUI(); return; }
+  const before=scale||1;
+  const cxh=(cx==null? hr.width/2 : cx-hr.left), cyh=(cy==null? hr.height/2 : cy-hr.top);
+  const px0=host.scrollLeft+cxh, py0=host.scrollTop+cyh;
+  zoom=nz; layout();
+  const ratio=scale/before;
+  host.scrollLeft=px0*ratio-cxh; host.scrollTop=py0*ratio-cyh;
+  updateZoomUI();
+}
+function zoomBy(f){ const hr=$('stageHost').getBoundingClientRect(); zoomAt(zoom*f, hr.left+hr.width/2, hr.top+hr.height/2); }
+function fitZoom(){ zoom=1; layout(); const h=$('stageHost'); h.scrollLeft=0; h.scrollTop=0; updateZoomUI(); }
+function setupZoomGestures(){
+  const host=$('stageHost'), wall=$('wall');
+  const dist=(a,b)=>Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+  const mid=(a,b)=>({x:(a.clientX+b.clientX)/2, y:(a.clientY+b.clientY)/2});
+  let d0=0, zStart=1, lastMid=null;
+  host.addEventListener('touchstart',e=>{ if(e.touches.length===2){ multiTouch=true; clearAlignGuides();
+    d0=dist(e.touches[0],e.touches[1]); zStart=zoom; lastMid=mid(e.touches[0],e.touches[1]); } },{passive:false});
+  host.addEventListener('touchmove',e=>{ if(multiTouch && e.touches.length===2){ e.preventDefault();
+    const d=dist(e.touches[0],e.touches[1]), m=mid(e.touches[0],e.touches[1]);
+    if(d0>0) zoomAt(zStart*(d/d0), m.x, m.y);
+    host.scrollLeft-=(m.x-lastMid.x); host.scrollTop-=(m.y-lastMid.y); lastMid=m; } },{passive:false});
+  const endT=e=>{ if(e.touches.length<2){ multiTouch=false; d0=0; } };
+  host.addEventListener('touchend',endT); host.addEventListener('touchcancel',endT);
+  // double-tap on empty wall toggles zoom at that point
+  let lastTap=0, lx=0, ly=0;
+  wall.addEventListener('pointerup',e=>{ if(multiTouch) return; const now=performance.now();
+    if(now-lastTap<300 && Math.hypot(e.clientX-lx,e.clientY-ly)<28){ lastTap=0; (zoom>1.05)? fitZoom() : zoomAt(2.6,e.clientX,e.clientY); }
+    else { lastTap=now; lx=e.clientX; ly=e.clientY; } });
+  $('zoomIn').addEventListener('click',()=>zoomBy(1.5));
+  $('zoomOut').addEventListener('click',()=>zoomBy(1/1.5));
+  $('zoomPct').addEventListener('click',fitZoom);
 }
 
 /* ------------------------------ RENDER ------------------------------- */
@@ -1134,12 +1192,14 @@ function attachDrag(el,it){
   el.addEventListener('pointerdown',e=>{
     if(e.button!==undefined&&e.button!==0&&e.pointerType==='mouse') return;
     selectItem(it.id);
-    rect=$('wall').getBoundingClientRect(); pid=e.pointerId; moved=false; dragging=false;
+    rect=$('wall').getBoundingClientRect(); pid=e.pointerId; moved=false; dragging=false; dragAbort=false;
     gdx=e.clientX-rect.left-it.x*scale; gdy=e.clientY-rect.top-it.y*scale;
     try{ el.setPointerCapture(pid); }catch(_){}
   });
   el.addEventListener('pointermove',e=>{
     if(pid===null||e.pointerId!==pid||!rect) return;
+    if(multiTouch){ dragAbort=true; if(dragging){el.classList.remove('dragging');dragging=false;} clearAlignGuides(); return; }
+    if(dragAbort) return;
     if(!dragging){
       if(Math.hypot(e.clientX-rect.left-gdx-it.x*scale, e.clientY-rect.top-gdy-it.y*scale)<4) return;
       dragging=true; el.classList.add('dragging');
@@ -1274,7 +1334,22 @@ async function useCrop(){
 
 /* ============================ DIMENSIONS ============================ */
 let dimMode='photo', editId=null;
+let lastDims={wIn:16,hIn:20};
 const PRESETS=[[4,6],[5,7],[8,10],[11,14],[16,20],[18,24],[24,36]];
+function suggestPreset(aspect){   // best common size matching a photo's shape, biased to last-used size
+  const lastLong=Math.max(lastDims.wIn,lastDims.hIn); let best=null;
+  for(const [pw,ph] of PRESETS) for(const [w,h] of [[pw,ph],[ph,pw]]){
+    const score=Math.abs((w/h)-aspect)+Math.abs(Math.max(w,h)-lastLong)/200;
+    if(!best||score<best.score) best={score,w,h};
+  }
+  return best?[best.w,best.h]:[16,20];
+}
+function applyPreset(w,h){   // photos keep their proportions; blanks take the exact size
+  if(pending && $('dimLock').checked){ const long=Math.max(w,h);
+    if(pending.aspect>=1){ setDimVal('dimW',long); setDimVal('dimH',long/pending.aspect); }
+    else { setDimVal('dimH',long); setDimVal('dimW',long*pending.aspect); }
+  } else { setDimVal('dimW',w); setDimVal('dimH',h); }
+}
 function openDim(mode,id){
   dimMode=mode; editId=id||null;
   const photo = mode==='photo' || (mode==='edit' && findItem(id)&&findItem(id).type==='photo');
@@ -1284,13 +1359,19 @@ function openDim(mode,id){
   $('dimColorRow').style.display = photo?'none':'flex';
   $('dimErr').textContent='';
   const u=state.unit; $('dimUW').textContent=$('dimUH').textContent=u;
-  // presets
+  $('dimLock').checked=true;
+  const editItem = mode==='edit'? findItem(id) : null;
+  const aspect = mode==='photo'? pending.aspect : (editItem&&editItem.type==='photo'? editItem.wIn/editItem.hIn : null);
+  const sug = aspect? suggestPreset(aspect) : null;
+  // presets — highlight the one that matches a photo's shape
   const pr=$('dimPresets'); pr.textContent='';
   PRESETS.forEach(([w,h])=>{ const b=document.createElement('button'); b.textContent=w+'×'+h+'″';
-    b.addEventListener('click',()=>{ setDimVal('dimW',w); setDimVal('dimH',h); }); pr.appendChild(b); });
+    b.addEventListener('click',()=>applyPreset(w,h));
+    if(sug && Math.max(w,h)===Math.max(sug[0],sug[1]) && Math.min(w,h)===Math.min(sug[0],sug[1])) b.classList.add('suggested');
+    pr.appendChild(b); });
   const prev=$('dimPreview');
   if(mode==='edit'){
-    const it=findItem(id);
+    const it=editItem;
     $('dimName').value=it.name; setDimVal('dimW',it.wIn); setDimVal('dimH',it.hIn);
     pending = it.type==='photo'? {src:it.src,aspect:it.wIn/it.hIn} : null;
     if(it.type==='photo'){ prev.style.backgroundImage=`url("${it.src}")`; prev.textContent=''; }
@@ -1298,15 +1379,13 @@ function openDim(mode,id){
   }else if(mode==='photo'){
     $('dimName').value='Frame '+(state.items.length+1);
     prev.style.backgroundImage=`url("${pending.src}")`; prev.textContent='';
-    // default width 16in, height from aspect
-    setDimVal('dimW',16); setDimVal('dimH', 16/pending.aspect);
+    applyPreset(sug[0], sug[1]);   // shape-matched + size-remembered → usually just tap Add
   }else{ // blank
     pending=null; $('dimName').value='Frame '+(state.items.length+1);
     prev.style.backgroundImage='none'; prev.style.background='var(--surface-2)'; prev.textContent='▭';
-    setDimVal('dimW',16); setDimVal('dimH',20);
+    setDimVal('dimW',lastDims.wIn); setDimVal('dimH',lastDims.hIn);
     $('dimColor').value='#c9b79c'; $('dimColorHex').textContent='#c9b79c';
   }
-  $('dimLock').checked=true;
   $('dimModal').classList.add('show');
 }
 function setDimVal(id,inch){ $(id).value=fmtNum(toDisp(inch,state.unit)); }
@@ -1315,6 +1394,7 @@ function saveDim(){
   const wIn=getDimIn('dimW'), hIn=getDimIn('dimH');
   if(!(wIn>0)||!(hIn>0)){ $('dimErr').textContent='Enter a width and height greater than zero.'; return; }
   const name=($('dimName').value||'Frame').slice(0,40);
+  lastDims={wIn,hIn};   // remember for the next frame
   const photo = dimMode==='photo' || (dimMode==='edit'&&pending);
   if(dimMode==='edit'){
     const it=findItem(editId); it.name=name; it.wIn=wIn; it.hIn=hIn;
@@ -1396,7 +1476,7 @@ function setWallFromInputs(){
   const wv=parseFloat($('wallW').value), hv=parseFloat($('wallH').value);
   if(wv>0) state.wall.wIn=toIn(wv,state.unit);
   if(hv>0) state.wall.hIn=toIn(hv,state.unit);
-  reclampAll(); layout(); renderWall(); renderReadout(); save(); commit();
+  zoom=1; reclampAll(); layout(); renderWall(); renderReadout(); save(); commit();
 }
 function closeMenu(){ $('menu').classList.remove('show'); }
 function closeProjMenu(){ $('projMenu').classList.remove('show'); }
@@ -1419,7 +1499,7 @@ function renderProjects(){
   mk('✎  Rename this wall', renameProject);
   if(store.projects.length>1) mk('🗑  Delete this wall', ()=>deleteProject(state.id), 'danger');
 }
-function applyActive(){ selectedId=null; clearAlignGuides(); syncControls(); layout(); renderWall(); renderTray(); renderReadout(); renderProjects(); histReset(); }
+function applyActive(){ selectedId=null; zoom=1; clearAlignGuides(); syncControls(); layout(); renderWall(); renderTray(); renderReadout(); renderProjects(); histReset(); }
 function newProject(){ const p=blankProject('Wall '+(store.projects.length+1)); store.projects.push(p); store.activeId=p.id; state=p; applyActive(); closeProjMenu(); save(); toast('New wall created'); }
 function switchProject(id){ const p=store.projects.find(x=>x.id===id); if(!p)return; store.activeId=id; state=p; applyActive(); closeProjMenu(); save(); }
 function renameProject(){ const n=prompt('Rename this wall:', state.name); if(n!=null){ const t=n.trim(); if(t) state.name=t.slice(0,40); syncControls(); renderProjects(); save(); commit(); } closeProjMenu(); }
@@ -1484,6 +1564,7 @@ function wire(){
   $('menuBtn').addEventListener('click',e=>{ e.stopPropagation(); closeProjMenu(); $('controls').classList.remove('open'); $('menu').classList.toggle('show'); });
   $('optBtn').addEventListener('click',e=>{ e.stopPropagation(); closeMenu(); closeProjMenu(); $('controls').classList.toggle('open'); });
   $('roHead').addEventListener('click',()=>{ $('readout').classList.toggle('expanded'); });
+  setupZoomGestures();
   document.addEventListener('click',e=>{
     if(!$('menu').contains(e.target)&&e.target!==$('menuBtn')) closeMenu();
     if(!$('projMenu').contains(e.target)&&!$('projBtn').contains(e.target)) closeProjMenu();
