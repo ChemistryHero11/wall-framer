@@ -1,10 +1,9 @@
 name: Deploy to GitHub Pages
 
-# Optional free hosting in addition to Vercel.
-# One-time setup: repo Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+# Optional free hosting in addition to Vercel. Manual (opt-in) so it doesn't fail before setup.
+# One-time setup: repo Settings -> Pages -> Build and deployment -> Source: "GitHub Actions",
+# then run this from the Actions tab -> "Deploy to GitHub Pages" -> "Run workflow".
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

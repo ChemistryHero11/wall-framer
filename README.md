@@ -52,10 +52,11 @@ No `vercel.json` or build step is needed — Vercel serves `index.html` from the
 
 ### Or: GitHub Pages (optional, free)
 
-A **Deploy to GitHub Pages** workflow is included. To use it: repo **Settings → Pages →
-Source: GitHub Actions**, then push — every push to `main` publishes the site. (Delete
-`.github/workflows/pages.yml` if you only want Vercel.) A **CI** workflow also validates
-`index.html` (structure + inline-JS syntax + assets) on every push.
+A **Deploy to GitHub Pages** workflow is included (manual / opt-in). To use it: repo
+**Settings → Pages → Source: GitHub Actions**, then run it from the **Actions** tab →
+*Deploy to GitHub Pages* → **Run workflow**. (Delete `.github/workflows/pages.yml` if you
+only want Vercel.) A **CI** workflow validates `index.html` (structure + inline-JS syntax
++ assets) automatically on every push.
 
 ## Phone + laptop workflow
 
