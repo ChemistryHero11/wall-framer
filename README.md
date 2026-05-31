@@ -63,8 +63,35 @@ only want Vercel.) A **CI** workflow validates `index.html` (structure + inline-
 Snap & crop photos on your phone, then arrange on your laptop (or vice-versa):
 **⋯ menu → Export project** (every wall + its photos travel inside one file) →
 **Import** on the other device (importing *adds* the walls — it never overwrites what's
-already there). Real-time cloud sync would need a backend, intentionally left out to
-keep this simple.
+already there). For **automatic** real-time sync instead, see **Cloud sync** below.
+
+## Cloud sync (optional)
+
+Off by default — the app is fully usable locally without it. To turn on **automatic,
+real-time sync** across your devices (sign in with the same email everywhere):
+
+1. Create a free project at **[supabase.com](https://supabase.com)**.
+2. In the Supabase **SQL Editor**, run:
+   ```sql
+   create table public.wallframer (
+     user_id uuid primary key references auth.users on delete cascade,
+     store jsonb,
+     updated_at timestamptz default now()
+   );
+   alter table public.wallframer enable row level security;
+   create policy "own row" on public.wallframer
+     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+   ```
+3. **Authentication → URL Configuration:** set **Site URL** and add a **Redirect URL**
+   matching your deployed URL, so the magic-link returns to the app.
+4. **Project Settings → API:** copy the **Project URL** and the **anon public** key.
+5. In the app: **⋯ → Set up cloud sync**, paste both, then **Sign in** — you'll get a
+   one-tap email link. Use the **same email on every device**.
+
+The anon key is meant to be public (safe in the browser); your data is protected by the
+row-level-security policy above. Sync uses last-write-wins and streams remote changes in
+live. To enable it for everyone without the in-app step, hardcode the two values in the
+`const SUPABASE = { … }` line near the top of `index.html`.
 
 ## Tech
 

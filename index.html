@@ -434,6 +434,16 @@ canvas.ruler{display:block}
       </div>
       <p class="hint" style="margin:0 10px 6px">Used to compute exact nail height from the frame’s top edge.</p>
       <hr>
+      <h4>Cloud sync</h4>
+      <button class="mi" id="cloudSetupBtn" role="menuitem">☁ Set up cloud sync…</button>
+      <div id="syncSection" style="display:none">
+        <div id="syncedOut"><button class="mi" id="signinBtn" role="menuitem">☁ Sign in to sync</button></div>
+        <div id="syncedIn" style="display:none">
+          <div class="mrow"><span style="font-size:13px">Synced as <b id="syncEmail"></b></span></div>
+          <button class="mi" id="signoutBtn" role="menuitem">↩ Sign out</button>
+        </div>
+      </div>
+      <hr>
       <button class="mi danger" id="miClear" role="menuitem">🗑 Clear this wall</button>
       <button class="mi" id="miHelp" role="menuitem">❔ How it works</button>
     </div>
@@ -567,6 +577,29 @@ canvas.ruler{display:block}
   </div>
 </div>
 
+<!-- ============ CLOUD SYNC MODAL ============ -->
+<div class="modal" id="syncModal">
+  <div class="card">
+    <div class="card-head"><h3 id="syncTitle">Cloud sync</h3><button class="x" id="syncClose" aria-label="Close">✕</button></div>
+    <div class="card-body">
+      <div id="syncConnect" style="display:none">
+        <p class="hint" style="margin-top:0">Paste your Supabase <b>Project URL</b> and <b>anon public key</b> (Supabase → Project Settings → API). They’re safe in the browser — your data is protected by row-level security.</p>
+        <div class="fld"><label>Supabase URL</label><div class="in"><input id="sbUrl" type="text" placeholder="https://xxxx.supabase.co"></div></div>
+        <div class="fld" style="margin-top:10px"><label>Anon public key</label><div class="in"><input id="sbKey" type="text" placeholder="eyJhbGci…"></div></div>
+      </div>
+      <div id="syncSignin" style="display:none">
+        <p class="hint" style="margin-top:0">Enter your email — we’ll send a one-tap sign-in link. Use the <b>same email on every device</b> to keep them in sync.</p>
+        <div class="fld"><label>Email</label><div class="in"><input id="sbEmail" type="email" placeholder="you@example.com"></div></div>
+      </div>
+      <div class="err" id="syncErr"></div>
+    </div>
+    <div class="card-foot">
+      <button id="syncCancel">Cancel</button>
+      <button class="primary" id="syncGo">Continue</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ SHOPPING LIST MODAL ============ -->
 <div class="modal" id="shopModal">
   <div class="card">
@@ -665,10 +698,9 @@ const idb = (()=>{
 })();
 
 let saveTimer=null, saving=false, dirtyAgain=false;
-function save(){                         // debounced full-snapshot save
-  if(!persistOK) return;
-  clearTimeout(saveTimer);
-  saveTimer=setTimeout(flush, 350);
+function save(){                         // debounced local save + cloud push
+  if(persistOK){ clearTimeout(saveTimer); saveTimer=setTimeout(flush, 350); }
+  pushCloud();
 }
 async function flush(){
   if(!persistOK) return;
@@ -682,6 +714,84 @@ async function flush(){
 // flush before the tab goes away (covers the debounce window)
 addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flush(); });
 addEventListener('pagehide', flush);
+
+/* ---------------------- CLOUD SYNC (Supabase, optional) ---------------- */
+// Hardcode these to enable sync for everyone; otherwise users connect in-app.
+const SUPABASE = { url:'', anonKey:'' };
+function syncCfg(){
+  if(SUPABASE.url && SUPABASE.anonKey) return SUPABASE;
+  try{ const u=localStorage.getItem('wf_sb_url'), k=localStorage.getItem('wf_sb_key'); if(u&&k) return {url:u,anonKey:k}; }catch(_){}
+  return null;
+}
+let sb=null, sbUser=null, sbChan=null, pullingRemote=false, pushT=null;
+async function initSync(){
+  const cfg=syncCfg(); updateAuthUI(); if(!cfg) return;
+  try{
+    const mod = await import('https://esm.sh/@supabase/supabase-js@2');
+    sb = mod.createClient(cfg.url, cfg.anonKey, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
+    sb.auth.onAuthStateChange((_e, sess)=> onAuth(sess && sess.user || null));
+    const { data } = await sb.auth.getSession();
+    await onAuth(data && data.session && data.session.user || null);
+  }catch(e){ console.warn('sync unavailable', e); toast('Cloud sync unavailable'); }
+}
+async function onAuth(user){ sbUser=user; updateAuthUI();
+  if(user){ await pullCloud(true); subscribeRealtime(); } else unsubscribe(); }
+async function signInEmail(email){ if(!sb) return;
+  const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.origin+location.pathname } });
+  toast(error? 'Sign-in error: '+error.message : 'Check your email for the sign-in link'); }
+async function signOutCloud(){ try{ if(sb) await sb.auth.signOut(); }catch(_){} sbUser=null; unsubscribe(); updateAuthUI(); }
+async function pullCloud(initial){
+  if(!sb||!sbUser) return;
+  let res; try{ res = await sb.from('wallframer').select('store').eq('user_id', sbUser.id).maybeSingle(); }catch(e){ console.warn(e); return; }
+  if(res.error){ console.warn(res.error); return; }
+  const remote = res.data && res.data.store;
+  if(remote && Array.isArray(remote.projects) && remote.projects.length){
+    if(initial && store.projects.some(p=>p.items.length) &&
+       !confirm('Cloud walls found. Load them onto this device?\n\nOK = use the cloud walls (replaces this device’s).\nCancel = keep this device’s walls and upload them.')){
+      pushCloud(true); return;
+    }
+    applyRemote(remote);
+  } else pushCloud(true);     // cloud empty → seed from local
+}
+function applyRemote(remote){ pullingRemote=true; try{ migrateStore(remote); state=activeProject(); applyActive(); save(); } finally{ pullingRemote=false; } }
+function pushCloud(now){
+  if(!sb||!sbUser||pullingRemote) return; clearTimeout(pushT);
+  const doIt=async()=>{ try{ await sb.from('wallframer').upsert({ user_id:sbUser.id, store:JSON.parse(JSON.stringify(store)), updated_at:new Date().toISOString() }); }catch(e){ console.warn('push failed', e); } };
+  if(now) doIt(); else pushT=setTimeout(doIt, 700);
+}
+function subscribeRealtime(){ unsubscribe(); if(!sb||!sbUser) return;
+  sbChan = sb.channel('wf-'+sbUser.id).on('postgres_changes',
+    { event:'*', schema:'public', table:'wallframer', filter:'user_id=eq.'+sbUser.id },
+    payload=>{ const remote=payload.new && payload.new.store; if(remote && !pullingRemote) applyRemote(remote); }).subscribe(); }
+function unsubscribe(){ if(sb&&sbChan){ try{ sb.removeChannel(sbChan); }catch(_){} sbChan=null; } }
+function updateAuthUI(){
+  const sec=$('syncSection'), setup=$('cloudSetupBtn'); if(!sec) return;
+  const cfg=!!syncCfg(); sec.style.display=cfg?'':'none'; if(setup) setup.style.display=cfg?'none':'';
+  const inEl=$('syncedIn'), outEl=$('syncedOut');
+  if(sbUser){ inEl.style.display=''; outEl.style.display='none'; $('syncEmail').textContent=sbUser.email||'this account'; }
+  else { inEl.style.display='none'; outEl.style.display=''; }
+}
+let syncMode='connect';
+function openSync(mode){
+  syncMode=mode; $('syncErr').textContent='';
+  $('syncConnect').style.display = mode==='connect'?'':'none';
+  $('syncSignin').style.display = mode==='signin'?'':'none';
+  $('syncTitle').textContent = mode==='connect'?'Connect cloud sync':'Sign in to sync';
+  if(mode==='connect'){ try{ $('sbUrl').value=localStorage.getItem('wf_sb_url')||''; $('sbKey').value=localStorage.getItem('wf_sb_key')||''; }catch(_){} }
+  $('syncModal').classList.add('show'); closeMenu();
+}
+async function syncGo(){
+  if(syncMode==='connect'){
+    const u=$('sbUrl').value.trim().replace(/\/$/,''), k=$('sbKey').value.trim();
+    if(!/^https:\/\/.+\.supabase\.co$/.test(u)||k.length<20){ $('syncErr').textContent='Enter a valid Supabase URL and anon key.'; return; }
+    try{ localStorage.setItem('wf_sb_url',u); localStorage.setItem('wf_sb_key',k); }catch(_){}
+    await initSync(); openSync('signin');
+  } else {
+    const em=$('sbEmail').value.trim();
+    if(!/.+@.+\..+/.test(em)){ $('syncErr').textContent='Enter a valid email address.'; return; }
+    await signInEmail(em); $('syncModal').classList.remove('show');
+  }
+}
 
 function migrateProject(s){
   const d=projDefaults(); if(!s||typeof s!=='object') s={};
@@ -1327,6 +1437,13 @@ function wire(){
     const id=state.id, name=state.name; Object.assign(state, projDefaults(), {id, name}); selectedId=null;
     syncControls(); layout(); renderWall(); renderTray(); renderReadout(); save(); commit(); closeMenu(); } });
   $('miHelp').addEventListener('click',()=>{ $('helpModal').classList.add('show'); closeMenu(); });
+  // cloud sync
+  $('cloudSetupBtn').addEventListener('click',()=>openSync('connect'));
+  $('signinBtn').addEventListener('click',()=>openSync(syncCfg()?'signin':'connect'));
+  $('signoutBtn').addEventListener('click',()=>{ signOutCloud(); closeMenu(); });
+  $('syncGo').addEventListener('click',syncGo);
+  $('syncCancel').addEventListener('click',()=>$('syncModal').classList.remove('show'));
+  $('syncClose').addEventListener('click',()=>$('syncModal').classList.remove('show'));
   $('importInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) importJSON(f); e.target.value=''; });
   // add frames
   $('addPhoto').addEventListener('click',()=>$('photoInput').click());
@@ -1402,6 +1519,7 @@ async function init(){
   // one-time tip if empty + first run
   let seen='1'; try{ seen=localStorage.getItem('wf_tip'); }catch(_){}
   if(!seen && state.items.length===0) setTimeout(()=>$('tip').classList.add('show'),500);
+  initSync();
 }
 init();
 </script>
